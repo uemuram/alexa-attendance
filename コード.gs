@@ -19,20 +19,23 @@ function main() {
   let statusSheet = spreadsheet.getSheetByName("ステータス");
   let summarySheet = spreadsheet.getSheetByName("日付別集計");
   
+  /*
   // ログ用のセル
   let logCell1 = recordSheet.getRange(20, 7);
   let logCell2 = recordSheet.getRange(21, 7);
   let logCell3 = recordSheet.getRange(22, 7);
   let now = new Date(); //現在日時を取得
-  let time = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-  
+  let time = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');  
   let logStr = "";
-  
+  */
+
   try{
     // 一番下の作業記録をとる
     var lastCell = recordSheet.getRange(recordSheet.getMaxRows(), RECORD_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
     let lastRow = lastCell.getRow();
-    logStr += (lastRow + ":" + lastCell.getColumn() + "\n");
+    // 書式を整備しておく
+    recordSheet.getRange(1,RECORD_DATE_COL,lastRow,RECORD_DATE_COL).setNumberFormat('yyyy/MM/dd');
+
     // 1件もデータがなければ終わり
     if(recordSheet.getRange(lastRow,RECORD_DATE_COL).getValue()=='日付'){
       return;
@@ -51,7 +54,6 @@ function main() {
       currentCellValue = prevCellValue;
     }
     let firstRow = i;
-    logStr += ("-" + firstRow + "\n");
     
     // 下がりながら集計する
     let startRow=firstRow,startTime,startAction,stopRow,stopTime,stopAction;
@@ -115,14 +117,6 @@ function main() {
       startRow = stopRow + 1;
     }
     
-    
-    
-    
-    logStr += dayWorkStartTime + "\n";
-    logStr += dayWorkStopTime + "\n";
-    
-    logStr += (msToTime(workTimeSum) + "\n");
-    
     // ------------ スタータスシート整備 ------------
     // ステータ作成
     let status = 'オフ';
@@ -161,10 +155,11 @@ function main() {
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+5).setFormulaR1C1('=R[0]C[-2]-R[0]C[-3]-R[0]C[-1]');
         
   }catch(error){
-    logCell3.setValue(printError(error));
+    //logCell3.setValue(printError(error));
+    console.error(printError(error));
   }finally{
-    logCell1.setValue(time);
-    logCell2.setValue(logStr);
+    //logCell1.setValue(time);
+    //logCell2.setValue(logStr);
     
   }   
 }
