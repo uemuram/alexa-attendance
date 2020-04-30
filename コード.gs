@@ -6,12 +6,14 @@ const RECORD_WORKTIME_COL = 5;
 const RECORD_MEMO_COL = 6;
 const STATUS_STATUS_ROW = 3;
 const STATUS_STATUS_COL = 1;
-const STATUS_WORKTIME_ROW = 5;
+const STATUS_WORKTIME_ROW = 7;
 const STATUS_WORKTIME_COL = 3;
+const STATUS_PASTTIME_ROW = 4;
+const STATUS_PASTTIME_COL = 2;
+
 const SUMMARY_DATE_COL = 1;
 
 function main() {
-  console.time('total');
   console.log('start');
   
   // シートを取得する
@@ -51,7 +53,7 @@ function main() {
     
     let startRow=firstRow,startTime,startAction,stopRow,stopTime,stopAction;
     let workTime,workTimeSum=0,restTimeSum;
-    let dayWorkStartTime=null,dayWorkStopTime=null;
+    let dayWorkStartTime=null,dayWorkStopTime=null,currentWorkStartTime=null;
     let findStart=false,findStop=false;
     let lastAction = '';
     
@@ -68,6 +70,7 @@ function main() {
           if(!dayWorkStartTime){
             dayWorkStartTime = times[startRow-firstRow][0];
           }
+          currentWorkStartTime = times[startRow-firstRow][0];
           lastAction = startAction;
           break;
         }
@@ -123,6 +126,14 @@ function main() {
     statusSheet.getRange(STATUS_STATUS_ROW,STATUS_STATUS_COL).setValue(status);
     statusSheet.getRange(STATUS_WORKTIME_ROW,STATUS_WORKTIME_COL).setValue(msToTime(workTimeSum));
     
+    let pastTime = '';
+    if(status == '仕事中'){
+      pastTime = '(' + currentWorkStartTime.toString().match(/(\d\d:\d\d):\d\d/)[1] + '～)';
+    }else if(status == '休憩中'){
+      pastTime = '(' + dayWorkStopTime.toString().match(/(\d\d:\d\d):\d\d/)[1] + '～)';
+    }
+    statusSheet.getRange(STATUS_PASTTIME_ROW,STATUS_PASTTIME_COL).setValue(pastTime);
+
     
     // ------------ 日付別集計シート整備 ------------
     let summaryLastCell = summarySheet.getRange(summarySheet.getMaxRows(), SUMMARY_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
@@ -146,7 +157,6 @@ function main() {
     console.error(printError(error));
   }finally{    
   }
-  console.timeEnd('total');
 }
 
 function printError(error){
