@@ -11,6 +11,7 @@ const STATUS_WORKTIME_COL = 3;
 const SUMMARY_DATE_COL = 1;
 
 function main() {
+  console.time('total');
   console.log('start');
   
   // シートを取得する
@@ -28,20 +29,21 @@ function main() {
   let time = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');  
   let logStr = "";
   */
-
+  
   try{
+    console.time('1');
     // 一番下の作業記録をとる
     var lastCell = recordSheet.getRange(recordSheet.getMaxRows(), RECORD_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
     let lastRow = lastCell.getRow();
-    // 書式を整備しておく
-    recordSheet.getRange(1,RECORD_DATE_COL,lastRow,RECORD_DATE_COL).setNumberFormat('yyyy/MM/dd');
-
+    
     // 1件もデータがなければ終わり
     if(recordSheet.getRange(lastRow,RECORD_DATE_COL).getValue()=='日付'){
       return;
     }
+    console.timeEnd('1');
     
     // 上がりながら、日付の切れ目を探す
+    console.time('2');
     let i;
     let prevCellValue;
     let currentCellValue = lastCell.getValue();
@@ -54,26 +56,38 @@ function main() {
       currentCellValue = prevCellValue;
     }
     let firstRow = i;
+    console.timeEnd('2');
     
     // 下がりながら集計する
+    console.time('3');
+    
+    // 走査する範囲を取得する
+    let times = recordSheet.getRange(firstRow,RECORD_TIME_COL,lastRow-firstRow+1,1).getValues();
+    let actions = recordSheet.getRange(firstRow,RECORD_ACTION_COL,lastRow-firstRow+1,1).getValues();
+    // 不要範囲をクリアする
+    recordSheet.getRange(firstRow,RECORD_WORKTIME_COL,lastRow-firstRow+1,1).clearContent();
+    recordSheet.getRange(firstRow,RECORD_MEMO_COL,lastRow-firstRow+1,1).clearContent();
+    
     let startRow=firstRow,startTime,startAction,stopRow,stopTime,stopAction;
     let workTime,workTimeSum=0,restTimeSum;
     let dayWorkStartTime=null,dayWorkStopTime=null;
     let findStart=false,findStop=false;
     let lastAction = '';
+    
+    let loopCount=1;
     while(1){      
+      console.time('3-1-'+loopCount);
       // 仕事を始めるアクションを探す
       let findStart = false;
       while(startRow <= lastRow){
-        startTime = recordSheet.getRange(startRow,RECORD_TIME_COL).getValue().getTime();
-        startAction = recordSheet.getRange(startRow,RECORD_ACTION_COL).getValue();
-        recordSheet.getRange(startRow,RECORD_WORKTIME_COL).setValue("");
-        recordSheet.getRange(startRow,RECORD_MEMO_COL).setValue("");
+        startTime = times[startRow-firstRow][0].getTime();
+        startAction = actions[startRow-firstRow][0];
+        
         if(startAction == '開始' || startAction =='再開'){
           findStart = true;
           // 一番最初に見つかった開始時刻を、その日の開始時刻にする。
           if(!dayWorkStartTime){
-            dayWorkStartTime = recordSheet.getRange(startRow,RECORD_TIME_COL);
+            dayWorkStartTime = times[startRow-firstRow][0];
           }
           lastAction = startAction;
           break;
@@ -85,18 +99,20 @@ function main() {
       if(!findStart){
         break;
       }
+      console.timeEnd('3-1-'+loopCount);
       
+      
+      console.time('3-2-'+loopCount);      
       // 仕事を止めるアクションを探す
       stopRow = startRow + 1;
       let findStop = false;
       while(stopRow <= lastRow){
-        stopTime = recordSheet.getRange(stopRow,RECORD_TIME_COL).getValue().getTime();
-        stopAction = recordSheet.getRange(stopRow,RECORD_ACTION_COL).getValue();
-        recordSheet.getRange(stopRow,RECORD_WORKTIME_COL).setValue("");
-        recordSheet.getRange(stopRow,RECORD_MEMO_COL).setValue("");
+        stopTime = times[stopRow-firstRow][0].getTime();
+        stopAction = actions[stopRow-firstRow][0];
+        
         if(stopAction == '中断' || stopAction =='終了'){
           findStop = true;
-          dayWorkStopTime = recordSheet.getRange(stopRow,RECORD_TIME_COL);
+          dayWorkStopTime = times[stopRow-firstRow][0];
           lastAction = stopAction;
           break;
         }
@@ -107,17 +123,25 @@ function main() {
       if(!findStop){
         break;
       }
+      console.timeEnd('3-2-'+loopCount);
       
+      
+      console.time('3-3-'+loopCount);            
       // 仕事時間を計算
       workTime = stopTime - startTime;
+      
       recordSheet.getRange(stopRow,RECORD_WORKTIME_COL).setValue(msToTime(workTime));
       workTimeSum += workTime;
       
       // 次の開始行をセット
       startRow = stopRow + 1;
+      console.timeEnd('3-3-'+loopCount);
+      loopCount++;
     }
+    console.timeEnd('3');
     
     // ------------ スタータスシート整備 ------------
+    console.time('4');
     // ステータ作成
     let status = 'オフ';
     if(lastAction == '開始' || lastAction == '再開'){
@@ -131,9 +155,11 @@ function main() {
     // シートに反映
     statusSheet.getRange(STATUS_STATUS_ROW,STATUS_STATUS_COL).setValue(status);
     statusSheet.getRange(STATUS_WORKTIME_ROW,STATUS_WORKTIME_COL).setValue(msToTime(workTimeSum));
+    console.timeEnd('4');
     
     
     // ------------ 日付別集計シート整備 ------------
+    console.time('5');
     let summaryLastCell = summarySheet.getRange(summarySheet.getMaxRows(), SUMMARY_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
     let today = lastCell.getValue();    
     let summaryRow = summaryLastCell.getRow()+1; 
@@ -148,12 +174,13 @@ function main() {
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL).setValue(today);
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+1).setFormulaR1C1('=TEXT(R[0]C[-1],"ddd")');
     // 開始、終了時刻
-    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+2).setValue(dayWorkStartTime.getValue());
-    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+3).setValue(dayWorkStopTime.getValue());
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+2).setValue(dayWorkStartTime);
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+3).setValue(dayWorkStopTime);
     // 作業時間、休憩時間
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+4).setValue(msToTime(workTimeSum));
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+5).setFormulaR1C1('=R[0]C[-2]-R[0]C[-3]-R[0]C[-1]');
-        
+    console.timeEnd('5');
+    
   }catch(error){
     //logCell3.setValue(printError(error));
     console.error(printError(error));
@@ -161,7 +188,8 @@ function main() {
     //logCell1.setValue(time);
     //logCell2.setValue(logStr);
     
-  }   
+  }
+  console.timeEnd('total');
 }
 
 function printError(error){
@@ -171,3 +199,4 @@ function printError(error){
 function msToTime(duration) {
   return (new Date(duration)).toUTCString().match(/(\d\d:\d\d):\d\d/)[1];
 }
+
