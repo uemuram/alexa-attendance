@@ -35,9 +35,10 @@ function main() {
     // 一番下の作業記録をとる
     var lastCell = recordSheet.getRange(recordSheet.getMaxRows(), RECORD_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
     let lastRow = lastCell.getRow();
+    let today = lastCell.getValue();
     
     // 1件もデータがなければ終わり
-    if(recordSheet.getRange(lastRow,RECORD_DATE_COL).getValue()=='日付'){
+    if(today=='日付'){
       return;
     }
     console.timeEnd('1');
@@ -46,7 +47,7 @@ function main() {
     console.time('2');
     let i;
     let prevCellValue;
-    let currentCellValue = lastCell.getValue();
+    let currentCellValue = today;
     
     for (i=lastRow; i>0; i--){
       prevCellValue = recordSheet.getRange(i-1,RECORD_DATE_COL).getValue();
@@ -161,23 +162,22 @@ function main() {
     // ------------ 日付別集計シート整備 ------------
     console.time('5');
     let summaryLastCell = summarySheet.getRange(summarySheet.getMaxRows(), SUMMARY_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
-    let today = lastCell.getValue();    
     let summaryRow = summaryLastCell.getRow()+1; 
-    if(summaryLastCell.getValue()=='日付'){
-      summaryRow = summaryLastCell.getRow()+1;
-    }else if(summaryLastCell.getValue().getTime()==today.getTime()){
-      summaryRow = summaryLastCell.getRow();      
+    let summaryLastCellValue = summaryLastCell.getValue();
+    let summaryLastCellRow = summaryLastCell.getRow();
+    if(summaryLastCellValue=='日付'){
+      summaryRow = summaryLastCellRow+1;
+    }else if(summaryLastCellValue.getTime()==today.getTime()){
+      summaryRow = summaryLastCellRow;      
     }
     
     // 各種情報を表示
     // 日付け、曜日
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL).setValue(today);
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+1).setFormulaR1C1('=TEXT(R[0]C[-1],"ddd")');
-    // 開始、終了時刻
-    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+2).setValue(dayWorkStartTime);
-    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+3).setValue(dayWorkStopTime);
-    // 作業時間、休憩時間
-    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+4).setValue(msToTime(workTimeSum));
+    // 開始、終了時刻、作業時間
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+2,1,3).setValues([[dayWorkStartTime,dayWorkStopTime,msToTime(workTimeSum)]]);
+    // 休憩時間
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+5).setFormulaR1C1('=R[0]C[-2]-R[0]C[-3]-R[0]C[-1]');
     console.timeEnd('5');
     
