@@ -169,16 +169,13 @@ function main() {
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+2,1,3).setValues([[dayWorkStartTime,dayWorkStopTime,msToTime(workTimeSum)]]);
     // 休憩時間
     summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+5).setFormulaR1C1('=R[0]C[-2]-R[0]C[-3]-R[0]C[-1]');    
-
-    
-
   }catch(error){
-    recordSheet.getRange(10,8).setValue(printError(error));
     console.error(printError(error));
   }finally{    
   }
 }
 
+// エラー文言を生成
 function printError(error){
   return "[メッセージ]" + error.message + "\n" + "[StackTrace]\n" + error.stack;
 }
