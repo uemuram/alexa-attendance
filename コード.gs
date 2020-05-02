@@ -1,15 +1,30 @@
 // 定数(座標)
 const RECORD_DATE_COL = 1;
-const RECORD_TIME_COL = 2;
-const RECORD_ACTION_COL = 3;
-const RECORD_WORKTIME_COL = 5;
-const RECORD_MEMO_COL = 6;
+const RECORD_ACTION_COL = 2;
+const RECORD_WORKTIME_COL = 4;
+const RECORD_MEMO_COL = 5;
 const STATUS_STATUS_ROW = 3;
 const STATUS_STATUS_COL = 1;
-const STATUS_WORKTIME_ROW = 5;
+const STATUS_WORKTIME_ROW = 7;
 const STATUS_WORKTIME_COL = 3;
-const STATUS_RESTTIME_ROW = 6;
-const STATUS_RESTTIME_COL = 3;
+const STATUS_PASTTIME_ROW = 4;
+const STATUS_PASTTIME_COL = 2;
+const SUMMARY_DATE_COL = 1;
+// 定数(月)
+const MONTHS = {
+  "January"    : 0,
+  "February"   : 1,
+  "March"      : 2,
+  "April"      : 3,
+  "May"        : 4,
+  "June"       : 5,
+  "July"       : 6,
+  "August"     : 7,
+  "September"  : 8,
+  "October"    : 9,
+  "November"   : 10,
+  "December"   : 11,
+};
 
 function main() {
   console.log('start');
@@ -20,60 +35,58 @@ function main() {
   let statusSheet = spreadsheet.getSheetByName("ステータス");
   let summarySheet = spreadsheet.getSheetByName("日付別集計");
   
-  // ログ用のセル
-  let logCell1 = recordSheet.getRange(20, 7);
-  let logCell2 = recordSheet.getRange(21, 7);
-  let logCell3 = recordSheet.getRange(22, 7);
-  let now = new Date(); //現在日時を取得
-  let time = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy/MM/dd HH:mm:ss');
-  
-  let logStr = "";
-
   try{
     // 一番下の作業記録をとる
     var lastCell = recordSheet.getRange(recordSheet.getMaxRows(), RECORD_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
     let lastRow = lastCell.getRow();
-    logStr += (lastRow + ":" + lastCell.getColumn() + "\n");
-    // 1件もデータがなければ終わり
-    if(recordSheet.getRange(lastRow,RECORD_DATE_COL).getValue()=='日付'){
+    let todayStr = lastCell.getValue();
+    
+    // 1件もデータがない、もしくは日付情報がとれなかったら終わり
+    let today = iftttDateStr2Date(todayStr);
+    if(!today){
       return;
     }
     
     // 上がりながら、日付の切れ目を探す
-    let i;
-    let prevCellValue;
-    let currentCellValue = lastCell.getValue();
-    
-    for (i=lastRow; i>0; i--){
-      prevCellValue = recordSheet.getRange(i-1,RECORD_DATE_COL).getValue();
-      if(prevCellValue=='日付' || currentCellValue.getTime() != prevCellValue.getTime()){
+    let checkDates = recordSheet.getRange(1,RECORD_DATE_COL,lastRow,1).getValues();
+    let dates = [iftttDateStr2Date(todayStr)];    
+    for(j=checkDates.length-1;j>=1;j--){
+      console.log(j + ":" + checkDates[j][0]);
+      let prevDate = iftttDateStr2Date(checkDates[j-1][0]);
+      if(!prevDate || !isSameDate(today, prevDate)){
         break;
       }
-      currentCellValue = prevCellValue;
+      dates.unshift(prevDate);
     }
-    let firstRow = i;
-    logStr += ("-" + firstRow + "\n");
+    let firstRow = j + 1;
     
-    // 下がりながら集計する
+    // 下がりながら集計する    
+    // 走査する範囲を取得
+    let actions = recordSheet.getRange(firstRow,RECORD_ACTION_COL,lastRow-firstRow+1,1).getValues();
+    // 不要範囲をクリア
+    recordSheet.getRange(firstRow,RECORD_WORKTIME_COL,lastRow-firstRow+1,1).clearContent();
+    recordSheet.getRange(firstRow,RECORD_MEMO_COL,lastRow-firstRow+1,1).clearContent();
+
     let startRow=firstRow,startTime,startAction,stopRow,stopTime,stopAction;
     let workTime,workTimeSum=0,restTimeSum;
-    let dayWorkStartTime=null,dayWorkStopTime=null;
+    let dayWorkStartTime=null,dayWorkStopTime=null,currentWorkStartTime=null;
     let findStart=false,findStop=false;
     let lastAction = '';
+    
     while(1){      
       // 仕事を始めるアクションを探す
       let findStart = false;
       while(startRow <= lastRow){
-        startTime = recordSheet.getRange(startRow,RECORD_TIME_COL).getValue().getTime();
-        startAction = recordSheet.getRange(startRow,RECORD_ACTION_COL).getValue();
-        recordSheet.getRange(startRow,RECORD_WORKTIME_COL).setValue("");
-        recordSheet.getRange(startRow,RECORD_MEMO_COL).setValue("");
+        startTime = dates[startRow-firstRow].getTime();
+        startAction = actions[startRow-firstRow][0];
+        
         if(startAction == '開始' || startAction =='再開'){
           findStart = true;
           // 一番最初に見つかった開始時刻を、その日の開始時刻にする。
           if(!dayWorkStartTime){
-            dayWorkStartTime = recordSheet.getRange(startRow,RECORD_TIME_COL).getDisplayValue();
+            dayWorkStartTime = dates[startRow-firstRow];
           }
+          currentWorkStartTime = dates[startRow-firstRow];
           lastAction = startAction;
           break;
         }
@@ -89,13 +102,12 @@ function main() {
       stopRow = startRow + 1;
       let findStop = false;
       while(stopRow <= lastRow){
-        stopTime = recordSheet.getRange(stopRow,RECORD_TIME_COL).getValue().getTime();
-        stopAction = recordSheet.getRange(stopRow,RECORD_ACTION_COL).getValue();
-        recordSheet.getRange(stopRow,RECORD_WORKTIME_COL).setValue("");
-        recordSheet.getRange(stopRow,RECORD_MEMO_COL).setValue("");
+        stopTime = dates[stopRow-firstRow].getTime();
+        stopAction = actions[stopRow-firstRow][0];
+        
         if(stopAction == '中断' || stopAction =='終了'){
           findStop = true;
-          dayWorkStopTime = recordSheet.getRange(stopRow,RECORD_TIME_COL).getDisplayValue();
+          dayWorkStopTime = dates[stopRow-firstRow];
           lastAction = stopAction;
           break;
         }
@@ -106,24 +118,15 @@ function main() {
       if(!findStop){
         break;
       }
-      
       // 仕事時間を計算
       workTime = stopTime - startTime;
       recordSheet.getRange(stopRow,RECORD_WORKTIME_COL).setValue(msToTime(workTime));
       workTimeSum += workTime;
-      
       // 次の開始行をセット
       startRow = stopRow + 1;
     }
     
     
-    
-    
-    logStr += dayWorkStartTime + "\n";
-    logStr += dayWorkStopTime + "\n";
-    
-    logStr += msToTime(workTimeSum);
-
     // ------------ スタータスシート整備 ------------
     // ステータ作成
     let status = 'オフ';
@@ -138,33 +141,77 @@ function main() {
     // シートに反映
     statusSheet.getRange(STATUS_STATUS_ROW,STATUS_STATUS_COL).setValue(status);
     statusSheet.getRange(STATUS_WORKTIME_ROW,STATUS_WORKTIME_COL).setValue(msToTime(workTimeSum));
-
+    
+    let pastTime = '';
+    if(status == '仕事中'){
+      pastTime = '(' + currentWorkStartTime.toString().match(/(\d\d:\d\d):\d\d/)[1] + '～)';
+    }else if(status == '休憩中'){
+      pastTime = '(' + dayWorkStopTime.toString().match(/(\d\d:\d\d):\d\d/)[1] + '～)';
+    }
+    statusSheet.getRange(STATUS_PASTTIME_ROW,STATUS_PASTTIME_COL).setValue(pastTime);
+    
     
     // ------------ 日付別集計シート整備 ------------
-    
-    
-    
-    
-    
-    
-    
-    
+    let summaryLastCell = summarySheet.getRange(summarySheet.getMaxRows(), SUMMARY_DATE_COL).getNextDataCell(SpreadsheetApp.Direction.UP);
+    let summaryRow = summaryLastCell.getRow()+1; 
+    let summaryLastCellValue = summaryLastCell.getValue();
+    let summaryLastCellRow = summaryLastCell.getRow();
+    if(summaryLastCellValue=='日付'){
+      summaryRow = summaryLastCellRow+1;
+    }else if(isSameDate(summaryLastCellValue,today)){
+      summaryRow = summaryLastCellRow;      
+    }
+    // 各種情報を表示
+    // 日付け、曜日
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL).setValue(today);
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+1).setFormulaR1C1('=TEXT(R[0]C[-1],"ddd")');
+    // 開始、終了時刻、作業時間
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+2,1,3).setValues([[dayWorkStartTime,dayWorkStopTime,msToTime(workTimeSum)]]);
+    // 休憩時間
+    summarySheet.getRange(summaryRow,SUMMARY_DATE_COL+5).setFormulaR1C1('=R[0]C[-2]-R[0]C[-3]-R[0]C[-1]');    
   }catch(error){
-    logCell3.setValue(printError(error));
-  }finally{
-    logCell1.setValue(time);
-    logCell2.setValue(logStr);
-    
-  }   
+    console.error(printError(error));
+  }finally{    
+  }
 }
 
+// エラー文言を生成
 function printError(error){
-  return "[名前] " + error.name + "\n" +
-    "[場所] " + error.fileName + "(" + error.lineNumber + "行目)\n" +
-      "[メッセージ]" + error.message + "\n" +      
-        "[StackTrace]\n" + error.stack;
+  return "[メッセージ]" + error.message + "\n" + "[StackTrace]\n" + error.stack;
 }
 
+// ミリ秒を時間に変換
 function msToTime(duration) {
   return (new Date(duration)).toUTCString().match(/(\d\d:\d\d):\d\d/)[1];
+}
+
+// IFTTTの日付時刻形式から、日付時刻を取り出す
+// April 28, 2020 at 02:41PM → 4/28 14:41
+function iftttDateStr2Date(str){
+  if(!str){
+    return null;
+  }
+  let match = str.match(/([a-zA-Z]+) (\d+), ([\d]{4}) at (\d+):(\d+)(AM|PM)/);
+  if(match){
+    let year = match[3];
+    let month = MONTHS[match[1]];
+    let day = match[2];
+    let ampm = match[6];
+    let hour = (ampm == 'PM' && match[4] <= 11) ? Number(match[4]) + 12 : match[4];
+    let minutes = match[5];
+    return new Date(year,month,day,hour,minutes);
+  } else {
+    return null;
+  }
+}
+
+// 日付けオブジェクト同士で、日付部分が一致するかを確認する
+function isSameDate(date1,date2){
+  if(date1.getYear()==date2.getYear() &&
+     date1.getMonth()==date2.getMonth() &&
+     date1.getDay()==date2.getDay()){
+    return true;
+  } else {
+    return false;
+  }
 }
