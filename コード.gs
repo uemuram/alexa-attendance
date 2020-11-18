@@ -1,8 +1,8 @@
 // 定数(座標)
 const RECORD_DATE_COL = 1;
 const RECORD_ACTION_COL = 2;
-const RECORD_WORKTIME_COL = 4;
-const RECORD_MEMO_COL = 5;
+const RECORD_WORKTIME_COL = 3;
+const RECORD_MEMO_COL = 4;
 const STATUS_STATUS_ROW = 3;
 const STATUS_STATUS_COL = 1;
 const STATUS_WORKTIME_ROW = 7;
